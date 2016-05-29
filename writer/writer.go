@@ -1,6 +1,7 @@
 package writer
 
 type WriteTask {
-	buff []byte
-	pos_start int
+	buf []byte
+	start int
+	length int
 }
