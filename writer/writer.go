@@ -1,7 +1,7 @@
 package writer
 
-type WriteTask {
-	buf []byte
-	start int
-	length int
+type WriteTask struct {
+  start int
+  length int
+  buf []byte
 }
