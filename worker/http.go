@@ -10,6 +10,7 @@ import (
 )
 
 const SIZE_WRITEBLOCK = 1024 * 100 * 4 
+const RNAGE_BYTES_FMT = "bytes=%d-%d"
 
 type PartWork struct{
   start int
@@ -52,10 +53,8 @@ func (self *HttpWorker) do(pwork *PartWork) (int, error) {
     req.Header.Set(k, v)
   }
 
-  range_val := fmt.Sprintf("bytes=%d-%d", 
-      pwork.start, pwork.start + pwork.length - 1)
-
-  log.Printf("range_val: %v", range_val)
+  range_val := fmt.Sprintf(
+      RNAGE_BYTES_FMT, pwork.start, pwork.start + pwork.length - 1)
 
   req.Header.Set("Range", range_val)
   resp, err := self.client.Do(req)
