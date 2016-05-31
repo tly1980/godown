@@ -2,9 +2,11 @@ package worker
 
 import (
   "bufio"
-  "godown/writer"
-  "net/http"
+  "fmt"
   "log"
+  "net/http"
+
+  //"godown/writer"
 )
 
 const SIZE_WRITEBLOCK = 1024 * 100 * 4 
@@ -12,15 +14,15 @@ const SIZE_WRITEBLOCK = 1024 * 100 * 4
 type PartWork struct{
   start int
   length int
-  range_header string
+  buf []byte
 }
 
 
 type HttpWorker struct {
   url string
   cookie map[string] string
-  work chan *PartWork
-  wpipe chan *writer.WriteTask
+  work chan PartWork
+  wpipe chan PartWork
   client *http.Client
   buf []byte
 }
@@ -50,7 +52,12 @@ func (self *HttpWorker) do(pwork *PartWork) (int, error) {
     req.Header.Set(k, v)
   }
 
-  req.Header.Set("Range", pwork.range_header)
+  range_val := fmt.Sprintf("bytes=%d-%d", 
+      pwork.start, pwork.start + pwork.length - 1)
+
+  log.Printf("range_val: %v", range_val)
+
+  req.Header.Set("Range", range_val)
   resp, err := self.client.Do(req)
 
   if err != nil {
@@ -74,24 +81,3 @@ func (self *HttpWorker) do(pwork *PartWork) (int, error) {
 
   return n_read, err
 }
-
-// const RANGE_BATCH = 1024 * 1024 * 4
-
-// type GetOpsManager {
-//   url string
-//   cookie map[string] string
-//   work chan *PartWork
-//   client *http.Client
-// }
-
-// func run(){
-
-//   req, err := http.NewRequest("HEAD", self.url, nil)
-//   for k, v := range self.cookie {
-//     req.Header.Set(k, v)
-//   }
-
-//   resp, err := self.client.Do(req)
-//   cnt_length_str = resp.Header.Get('Content-Length')
-//   number, _ := strconv.Atoi(cnt_length_str, 10, 0)
-// }
