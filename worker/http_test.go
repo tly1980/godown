@@ -30,13 +30,14 @@ func fread(path string, start int64, length int64) []byte{
   nread, err := reader.Read(buf)
 
   if int64(nread) != length {
-    log.Fatal("asd")
+    log.Fatal("read byte count is not equal to requested length!")
   }
 
   return buf
 }
 
-func _test_worker_download(t *testing.T, fname string, start int64, length int64){
+func _test_worker_download(
+    t *testing.T, fname string, start int64, length int64){
   url := TEST_BASE_URL + fname
   test_folder, err := filepath.Abs(path.Join("..", "test"))
   if err != nil {
