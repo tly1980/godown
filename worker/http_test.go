@@ -2,7 +2,6 @@ package worker
 
 import (
   "bufio"
-  "fmt"
   "log"
   "os"
   "testing"
@@ -13,8 +12,10 @@ import (
 )
 
 const TEST_DATA_FOLDER = "../test"
+const TEST_BASE_URL = "http://localhost:8080/"
 
-func read(path string, start int64, length int64) []byte{
+
+func fread(path string, start int64, length int64) []byte{
   file, err := os.Open(path)
   if (err != nil ) {
     log.Fatal(err)
@@ -35,41 +36,42 @@ func read(path string, start int64, length int64) []byte{
   return buf
 }
 
-func TestWorkerDo(t *testing.T) {
-  ch_in := make(chan PartWork)
-  ch_out := make(chan PartWork)
-
-  base_url := "http://localhost:8080/"
-  base_path, err := filepath.Abs(path.Join("..", "test"))
+func _test_worker_download(t *testing.T, fname string, start int64, length int64){
+  url := TEST_BASE_URL + fname
+  test_folder, err := filepath.Abs(path.Join("..", "test"))
   if err != nil {
     log.Fatal(err)
   }
-  fname := "test1"
 
-  url := base_url + fname
-  fpath := path.Join(base_path, fname)
+  fpath := path.Join(test_folder, fname)
 
-  fmt.Println("url: ", url)
+  ch_in := make(chan PartWork)
+  ch_out := make(chan PartWork)
+  defer close(ch_in)
+  defer close(ch_out)
+
   client := new_http_client()
   http_worker := new_worker(ch_in, ch_out, client)
 
   pw := PartWork{
-    start: 0, length: 100, url: url, 
+    start: uint64(start), length: uint64(length), url: url, 
   }
   go http_worker.run()
 
   ch_in <- pw
   pw2 := <-ch_out
 
-  defer close(ch_in)
-  defer close(ch_out)
+  buf := fread(fpath, start, length)
 
-  buf := read(fpath, 0, 100)
-
-  //fmt.Printf("%v, %v\n", pw2.try_count, pw2.buf[:pw2.length])
-
-  assert.Equal(t, pw2.try_count, 1,  "they should be equal")
+  assert.Equal(t, 1, pw2.try_count, "should only try one time")
   assert.Equal(t, buf, pw2.buf[:pw2.length],  "they should be equal")
+
+}
+
+func TestWorkerDo(t *testing.T) {
+  _test_worker_download(t, "test1", 0, 100)
+  _test_worker_download(t, "test1", 10, 20)
+  _test_worker_download(t, "test1", 1234, 2345)
 }
 
 // func TestHttpdownGetsize(t *testing.T) {
