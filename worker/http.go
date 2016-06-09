@@ -114,7 +114,7 @@ func new_chunk_generator(total_size uint64, block_size uint64) *ChunkGenerator {
 }
 
 func (self *ChunkGenerator) next() *Chunk {
-  if self.start >= self.total_size {
+  if self.end() {
     return nil
   }
 
