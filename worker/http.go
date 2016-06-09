@@ -12,7 +12,7 @@ import (
   //"godown/writer"
 )
 
-const SIZE_WRITEBLOCK = 1024 * 100 * 4 
+const SIZE_WRITEBLOCK = 1024 * 100 * 4
 const RNAGE_BYTES_FMT = "bytes=%d-%d"
 const HTTP_TIMEOUT_SECS = 30
 const WORKER_MAX_RETIREX = 3
@@ -177,41 +177,10 @@ func (self *HttpDownloader) get_size(url string) (uint64, error) {
       return size, nil
     }
   }
-  
+
   return 0, err
 }
 
-
-func (self *HttpDownloader) GetSize(url string) (uint64, error) {
-  req, err := http.NewRequest("HEAD", url, nil)
-
-  if err != nil {
-    log.Printf("Failed to create http request to:%v, %v", url, err)
-    return 0, err
-  }
-
-  for k, v := range self.cookie {
-    req.Header.Set(k, v)
-  }
-
-  resp, err := self.client.Do(req)
-
-  if err != nil {
-    return 0, err
-  }
-
-  defer resp.Body.Close()
-
-  if val, ok := resp.Header["Content-Length"]; ok {
-    size, err := strconv.ParseUint(val[0], 10, 64)
-
-    if (err == nil ) {
-      return size, nil
-    }
-  }
-  
-  return 0, err
-}
 
 // func (self *HttpDownloader) Fetch(url string, path string) (uint64, error) {
 // }

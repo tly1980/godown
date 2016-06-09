@@ -2,17 +2,18 @@ package worker
 
 import (
   "bufio"
+  "fmt"
   "log"
   "os"
-  "testing"
   "path"
   "path/filepath"
+  "testing"
 
   "github.com/stretchr/testify/assert"
 )
 
 const TEST_DATA_FOLDER = "../test"
-const TEST_BASE_URL = "http://localhost:8080/"
+const TEST_BASE_URL = "http://localhost:8080/test/"
 
 
 func fread(path string, start int64, length int64) []byte{
@@ -45,6 +46,7 @@ func _test_worker_download(
   }
 
   fpath := path.Join(test_folder, fname)
+  fmt.Printf("fpath: %v\n", fpath)
 
   ch_in := make(chan PartWork)
   ch_out := make(chan PartWork)
@@ -55,7 +57,7 @@ func _test_worker_download(
   http_worker := new_worker(ch_in, ch_out, client)
 
   pw := PartWork{
-    start: uint64(start), length: uint64(length), url: url, 
+    start: uint64(start), length: uint64(length), url: url,
   }
   go http_worker.run()
 
@@ -69,21 +71,25 @@ func _test_worker_download(
 
 }
 
-func TestWorkerDo(t *testing.T) {
+func TestWorker_run(t *testing.T) {
   _test_worker_download(t, "test1", 0, 100)
   _test_worker_download(t, "test1", 10, 20)
   _test_worker_download(t, "test1", 1234, 2345)
 }
 
-// func TestHttpdownGetsize(t *testing.T) {
-//   url := "http://localhost:8080/test1"
-//   hd := HttpDownloader {client: &http.Client{}}
+func TestHttpdown_get_size(t *testing.T) {
+  url := TEST_BASE_URL + "test1"
 
-//   n_size, err := hd.GetSize(url)
-//   if n_size != 4096 {
-//     t.Error("n_size is not equal to what requested")
-//   }
-//   if err != nil {
-//     t.Error("err is not nil")
-//   }
-// }
+  ch_work := make(chan string)
+  ch_done := make(chan bool)
+
+  hd := NewHttpDownloader(1, ch_work, ch_done)
+
+  n_size, err := hd.get_size(url)
+  if n_size != 4096 {
+    t.Error("n_size is not equal to what requested")
+  }
+  if err != nil {
+    t.Error("err is not nil")
+  }
+}
