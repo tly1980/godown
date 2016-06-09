@@ -114,7 +114,7 @@ func new_chunk_generator(total_size uint64, block_size uint64) *ChunkGenerator {
 }
 
 func (self *ChunkGenerator) next() *Chunk {
-  if self.end() {
+  if !self.has_next() {
     return nil
   }
 
@@ -134,13 +134,13 @@ func (self *ChunkGenerator) next() *Chunk {
   return &ret
 }
 
-func (self *ChunkGenerator) end() bool {
+func (self *ChunkGenerator) has_next() bool {
   if self.start >= self.total_size {
+    return false
+  }else{
     return true
   }
-  return false
 }
-
 
 func (self *HttpWorker) do(pwork *PartWork) (int, error) {
   req, err := http.NewRequest("GET", pwork.url, nil)
