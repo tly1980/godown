@@ -50,11 +50,17 @@ func _test_worker_download(
 
   ch_in := make(chan PartWork)
   ch_out := make(chan PartWork)
-  defer close(ch_in)
-  defer close(ch_out)
+  ch_done := make(chan bool)
+  defer func () {
+    close(ch_in)
+    close(ch_out)
+    // Don't get from ch_done before closing in and out channels
+    <-ch_done
+    close(ch_done)
+  }()
 
   client := new_http_client()
-  http_worker := new_worker(ch_in, ch_out, client)
+  http_worker := new_worker(ch_in, ch_out, ch_done, client)
 
   pw := PartWork{
     start: uint64(start), length: uint64(length), url: url,
@@ -79,17 +85,29 @@ func TestWorker_run(t *testing.T) {
 
 func TestHttpdown_get_size(t *testing.T) {
   url := TEST_BASE_URL + "test1"
+  cookie := make(map[string]string)
+  hd := NewHttpDownloader(1, url, "a", cookie)
 
-  ch_work := make(chan string)
-  ch_done := make(chan bool)
-
-  hd := NewHttpDownloader(1, ch_work, ch_done)
-
-  n_size, err := hd.get_size(url)
+  n_size, err := hd.get_size()
   if n_size != 4096 {
     t.Error("n_size is not equal to what requested")
   }
   if err != nil {
     t.Error("err is not nil")
   }
+}
+
+func Test_chunk_generator1(t *testing.T) {
+  chunk_gen := new_chunk_generator(5, 3)
+  ch1 := chunk_gen.next()
+  assert.Equal(t, uint64(0), ch1.start, "start should be 0")
+  assert.Equal(t, uint64(3), ch1.length, "start should be 0")
+
+  ch2 := chunk_gen.next()
+  assert.Equal(t, uint64(3), ch2.start, "start should be 3")
+  assert.Equal(t, uint64(2), ch2.length, "start should be 2")
+
+  ch3 := chunk_gen.next()
+  var exp *Chunk
+  assert.Equal(t, exp, ch3, "ch3 should be nil")
 }
