@@ -14,6 +14,7 @@ import (
 
 const TEST_DATA_FOLDER = "../test"
 const TEST_BASE_URL = "http://localhost:8080/test/"
+const TMP_BASE = "/tmp"
 
 
 func fread(path string, start int64, length int64) []byte{
@@ -50,7 +51,7 @@ func _test_worker_download(
 
   ch_in := make(chan PartWork)
   ch_out := make(chan PartWork)
-  ch_done := make(chan bool)
+  ch_done := make(chan string)
   defer func () {
     close(ch_in)
     close(ch_out)
@@ -60,10 +61,10 @@ func _test_worker_download(
   }()
 
   client := new_http_client()
-  http_worker := new_worker(ch_in, ch_out, ch_done, client)
+  http_worker := new_worker("test_worker", ch_in, ch_out, ch_done, client)
 
   pw := PartWork{
-    start: uint64(start), length: uint64(length), url: url,
+    start: start, length: length, url: url,
   }
   go http_worker.run()
 
@@ -73,7 +74,7 @@ func _test_worker_download(
   buf := fread(fpath, start, length)
 
   assert.Equal(t, 1, pw2.try_count, "should only try one time")
-  assert.Equal(t, buf, pw2.buf[:pw2.length],  "they should be equal")
+  assert.Equal(t, buf, pw2.buf,  "they should be equal")
 
 }
 
@@ -97,23 +98,16 @@ func TestHttpdown_get_size(t *testing.T) {
   }
 }
 
-func Test_chunk_generator1(t *testing.T) {
-  chunk_gen := new_chunk_generator(5, 3)
+func _test_httpdown_doanlod(t *testing.T, fname string) {
+  url := TEST_BASE_URL + fname
+  dst := path.Join(TMP_BASE, fname)
+  cookie := make(map[string]string)
+  hd := NewHttpDownloader(2, url, dst, cookie)
+  fmt.Printf("dst: %s\n", dst)
+  hd.Fetch()
+  hd.WaitTillDone()
+}
 
-  assert.Equal(t, true, chunk_gen.has_next(), "should end")
-  ch1 := chunk_gen.next()
-  assert.Equal(t, true, chunk_gen.has_next(), "should end")
-  assert.Equal(t, uint64(0), ch1.start, "start should be 0")
-  assert.Equal(t, uint64(3), ch1.length, "start should be 0")
-
-  assert.Equal(t, true, chunk_gen.has_next(), "should end")
-  ch2 := chunk_gen.next()
-  assert.Equal(t, false, chunk_gen.has_next(), "should end")
-  assert.Equal(t, uint64(3), ch2.start, "start should be 3")
-  assert.Equal(t, uint64(2), ch2.length, "start should be 2")
-
-  ch3 := chunk_gen.next()
-  assert.Equal(t, false, chunk_gen.has_next(), "should end")
-  var nil_chunk *Chunk
-  assert.Equal(t, nil_chunk, ch3, "ch3 should be nil")
+func TestHttpdown_download(t *testing.T) {
+  _test_httpdown_doanlod(t, "test1")
 }
