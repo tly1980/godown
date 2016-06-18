@@ -32,7 +32,8 @@ func fread(path string, start int64, length int64) []byte{
   nread, err := reader.Read(buf)
 
   if int64(nread) != length {
-    log.Fatal("read byte count is not equal to requested length!")
+    log.Printf("%v\n", string(buf[:nread]))
+    log.Fatal("read byte count is not equal to requested length:", nread, length, len(string(buf[:nread])))
   }
 
   return buf
@@ -82,6 +83,7 @@ func TestWorker_run(t *testing.T) {
   _test_worker_download(t, "test1", 0, 100)
   _test_worker_download(t, "test1", 10, 20)
   _test_worker_download(t, "test1", 1234, 2345)
+  _test_worker_download(t, "test1", 0, 4096)
 }
 
 func TestHttpdown_get_size(t *testing.T) {

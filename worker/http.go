@@ -10,8 +10,10 @@ import (
   "os"
   "strconv"
   "time"
+  "sync"
 
   "github.com/golang/glog"
+
   //"godown/writer"
 )
 
@@ -26,7 +28,6 @@ type PartWork struct{
   cookie map[string] string
   start int64
   length int64
-  n_read uint64
   buf []byte
   try_count int
 }
@@ -51,7 +52,6 @@ type HttpWorker struct {
   ch_out chan PartWork
   ch_done chan string
   client *http.Client
-  buf []byte
 }
 
 func new_worker(
@@ -64,7 +64,6 @@ func new_worker(
     ch_out: ch_out,
     ch_done: ch_done,
     client: client,
-    buf: make([]byte, SIZE_WRITEBLOCK),
   }
 }
 
@@ -74,13 +73,12 @@ func (self *HttpWorker) run(){
   for w := range self.ch_in {
     for i := 0; i < WORKER_MAX_RETIREX; i++ {
       w.try_count++
-      n_read, err := self.do(&w)
+      buf, err := self.do(&w)
       if (err != nil ){
         log.Printf("err: %s", err)
         continue
       }else{
-        w.buf = self.buf[:n_read]
-        w.n_read = uint64(n_read)
+        w.buf = buf
         fmt.Println("done\n")
         break
       }
@@ -92,14 +90,14 @@ func (self *HttpWorker) run(){
 }
 
 
-func (self *HttpWorker) do(pwork *PartWork) (int, error) {
+func (self *HttpWorker) do(pwork *PartWork) ([]byte, error) {
   req, err := http.NewRequest("GET", pwork.url, nil)
 
   glog.Info("worker: %s: %v", self.name, pwork)
 
   if err != nil {
     log.Printf("Failed to create http request to:%v, %v", pwork.url, err)
-    return -1, err
+    return nil, err
   }
 
   for k, v := range pwork.cookie {
@@ -111,30 +109,27 @@ func (self *HttpWorker) do(pwork *PartWork) (int, error) {
 
   req.Header.Set("Range", range_val)
   resp, err := self.client.Do(req)
+  log.Printf("range_val: %s\n", range_val)
 
   if err != nil {
-    return -1, err
+    return nil, err
   }
 
   defer resp.Body.Close()
-  reader := bufio.NewReader(resp.Body)
+  n_size := int(pwork.length)
+  reader := bufio.NewReaderSize(resp.Body, n_size)
 
-  n_read, err := reader.Read(self.buf)
+  buf, err := reader.Peek(n_size)
   if err != io.EOF && err != nil {
     log.Printf("Failed in reading from resp: %v", err)
-    return -1, err
+    return nil, err
   }
 
-  if int64(n_read) != pwork.length {
-    return -1, fmt.Errorf(
-        "n_read: %v != PartWork.length: %v (requested)",
-        n_read, pwork.length)
-  }
-
-  return n_read, nil
+  return buf, nil
 }
 
 type HttpDownloader struct {
+  sync.Mutex
   worker_count int
   workers [] *HttpWorker
   src_url string
@@ -143,15 +138,16 @@ type HttpDownloader struct {
   ch_pw_in chan PartWork
   ch_pw_out chan PartWork
   ch_done chan string
-  ch_done_worker chan bool
   client *http.Client
   try_count int
   status string
   res_size int64
   file *os.File
   chunk_generator ChunkGenerator
-  write_count int
+  write_count int64
   expect_write_count int64
+  is_produced_end bool
+  _thread_count int
 }
 
 func  NewHttpDownloader(
@@ -192,6 +188,14 @@ func (self *HttpDownloader) _init() error {
   return nil
 }
 
+func (self *HttpDownloader) _thread(fn func(), name string) {
+  self._thread_count ++
+  go func() {
+    fn()
+    self.ch_done <- name
+  }()
+}
+
 func (self *HttpDownloader) Fetch() {
   res_size, err := self.get_size()
   if ( err != nil ){
@@ -204,27 +208,20 @@ func (self *HttpDownloader) Fetch() {
     log.Fatal(err)
   }
 
-  fmt.Println("a")
-
-  go self._chunk_producer()
-  go self._storer()
-  fmt.Println("b")
+  self._thread(self._chunk_producer, "_chunk_producer")
+  self._thread(self._storer, "_storer")
+  self._thread(self._checker, "_checker")
 }
 
 func (self *HttpDownloader) WaitTillDone() {
-  for i := 0; i < self.worker_count + 2; i++ {
+  for i := 0; i < self.worker_count + self._thread_count ; i++ {
     finisher := <- self.ch_done
-    fmt.Printf("%s is done\n", finisher)
+    fmt.Printf("done: %s\n", finisher)
   }
 }
 
 
 func (self *HttpDownloader) _chunk_producer() {
-  defer func() {
-    close(self.ch_pw_in)
-    self.ch_done <- "chunk_producer"
-  }()
-
   chunk_generator := new_chunk_generator(self.res_size, DEFAULT_REMOTE_CHUNK_SIZE)
 
   for chunk_generator.has_next() {
@@ -237,32 +234,59 @@ func (self *HttpDownloader) _chunk_producer() {
       try_count: 0,
     }
 
-    fmt.Printf("pw: %v\n", pw)
+    fmt.Printf("aaa pw: %v\n", pw)
 
     self.ch_pw_in <- pw
+    fmt.Printf("bbb pw: %v\n", chunk_generator.has_next())
+    self.Lock()
+    self.expect_write_count += 1
+    self.Unlock()
   }
 
-   fmt.Printf("gen end")
+  fmt.Printf("ccc\n")
+
+  self.Lock()
+  fmt.Printf("ddd\n")
+  self.is_produced_end = true
+  self.Unlock()
+  fmt.Printf("eee\n")
+
+   fmt.Println("gen end")
 }
 
 func (self *HttpDownloader) _storer() {
-  defer func() {
-    self.file.Close()
-    close(self.ch_pw_out)
-    self.ch_done <- "storer"
-  } ()
+  defer self.file.Close()
 
   writer := bufio.NewWriter(self.file)
   defer writer.Flush()
 
-  for pw := range self.ch_pw_out {
+  for pw := range self.ch_pw_out { 
+    fmt.Printf("got pw out, start:%v, length: %v\n", pw.start, pw.length)
     self.file.Seek(pw.start, 0)
     writer.Write(pw.buf)
-    writer.Flush()
-    fmt.Println("write done")
+    fmt.Println("finished writing")
+    self.Lock()
+    self.write_count++
+    self.Unlock()
+    fmt.Printf("write: %v - %v \n", self.is_produced_end, self.write_count)
   }
-
 }
+
+func (self *HttpDownloader) _checker() {
+  defer func(){
+    close(self.ch_pw_in)
+    close(self.ch_pw_out)
+  }()
+
+  for {
+     time.Sleep(time.Millisecond * 500)
+     if self.is_produced_end && self.write_count >= self.expect_write_count {
+      fmt.Printf("stop\n")
+      break
+    }
+  }
+}
+
 
 func (self *HttpDownloader) get_size() (int64, error) {
   req, err := http.NewRequest("HEAD", self.src_url, nil)
