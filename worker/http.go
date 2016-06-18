@@ -196,6 +196,11 @@ func (self *HttpDownloader) _thread(fn func(), name string) {
   }()
 }
 
+func (self *HttpDownloader) clean_up() {
+  close(self.ch_pw_in)
+  close(self.ch_pw_out)
+}
+
 func (self *HttpDownloader) Fetch() {
   res_size, err := self.get_size()
   if ( err != nil ){
@@ -273,10 +278,7 @@ func (self *HttpDownloader) _storer() {
 }
 
 func (self *HttpDownloader) _checker() {
-  defer func(){
-    close(self.ch_pw_in)
-    close(self.ch_pw_out)
-  }()
+  defer self.clean_up()
 
   for {
      time.Sleep(time.Millisecond * 500)
