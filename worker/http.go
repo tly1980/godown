@@ -93,7 +93,7 @@ func (self *HttpWorker) run(){
 func (self *HttpWorker) do(pwork *PartWork) ([]byte, error) {
   req, err := http.NewRequest("GET", pwork.url, nil)
 
-  glog.Info("worker: %s: %v", self.name, pwork)
+  glog.Info("9999 worker: %s: %v", self.name, pwork)
 
   if err != nil {
     log.Printf("Failed to create http request to:%v, %v", pwork.url, err)
