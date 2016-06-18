@@ -7,7 +7,7 @@ build:
 all: build
 
 ut:
-	pushd worker; go test -v; popd
+	pushd worker; go test -stderrthreshold=INFO; popd
 
 deps:
 	go get github.com/stretchr/testify/assert

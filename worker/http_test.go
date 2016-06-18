@@ -2,20 +2,20 @@ package worker
 
 import (
   "bufio"
-  "fmt"
   "log"
   "os"
   "path"
   "path/filepath"
   "testing"
+  "flag"
 
   "github.com/stretchr/testify/assert"
+  "github.com/golang/glog"
 )
 
 const TEST_DATA_FOLDER = "../test"
 const TEST_BASE_URL = "http://localhost:8080/test/"
 const TMP_BASE = "/tmp"
-
 
 func fread(path string, start int64, length int64) []byte{
   file, err := os.Open(path)
@@ -48,7 +48,8 @@ func _test_worker_download(
   }
 
   fpath := path.Join(test_folder, fname)
-  fmt.Printf("fpath: %v\n", fpath)
+
+  glog.Infof("fpath: %v", fpath)
 
   ch_in := make(chan PartWork)
   ch_out := make(chan PartWork)
@@ -105,11 +106,16 @@ func _test_httpdown_doanlod(t *testing.T, fname string) {
   dst := path.Join(TMP_BASE, fname)
   cookie := make(map[string]string)
   hd := NewHttpDownloader(2, url, dst, cookie)
-  fmt.Printf("dst: %s\n", dst)
+  glog.Infof("dst: %s\n", dst)
   hd.Fetch()
   hd.WaitTillDone()
 }
 
 func TestHttpdown_download(t *testing.T) {
   _test_httpdown_doanlod(t, "test1")
+}
+
+func TestMain(m *testing.M) {
+  flag.Parse()
+  os.Exit(m.Run())
 }

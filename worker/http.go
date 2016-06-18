@@ -13,8 +13,6 @@ import (
   "sync"
 
   "github.com/golang/glog"
-
-  //"godown/writer"
 )
 
 const SIZE_WRITEBLOCK = 1024 * 100 * 4
@@ -75,11 +73,10 @@ func (self *HttpWorker) run(){
       w.try_count++
       buf, err := self.do(&w)
       if (err != nil ){
-        log.Printf("err: %s", err)
+        glog.Errorf("err: %s, try_count: %v", err, w.try_count)
         continue
       }else{
         w.buf = buf
-        fmt.Println("done\n")
         break
       }
     }
@@ -93,7 +90,7 @@ func (self *HttpWorker) run(){
 func (self *HttpWorker) do(pwork *PartWork) ([]byte, error) {
   req, err := http.NewRequest("GET", pwork.url, nil)
 
-  glog.Info("9999 worker: %s: %v", self.name, pwork)
+  glog.Infof("worker: %s: %v", self.name, pwork)
 
   if err != nil {
     log.Printf("Failed to create http request to:%v, %v", pwork.url, err)
@@ -221,7 +218,7 @@ func (self *HttpDownloader) Fetch() {
 func (self *HttpDownloader) WaitTillDone() {
   for i := 0; i < self.worker_count + self._thread_count ; i++ {
     finisher := <- self.ch_done
-    fmt.Printf("done: %s\n", finisher)
+    glog.Infof("done: %s\n", finisher)
   }
 }
 
@@ -239,24 +236,15 @@ func (self *HttpDownloader) _chunk_producer() {
       try_count: 0,
     }
 
-    fmt.Printf("aaa pw: %v\n", pw)
-
     self.ch_pw_in <- pw
-    fmt.Printf("bbb pw: %v\n", chunk_generator.has_next())
     self.Lock()
     self.expect_write_count += 1
     self.Unlock()
   }
 
-  fmt.Printf("ccc\n")
-
   self.Lock()
-  fmt.Printf("ddd\n")
   self.is_produced_end = true
   self.Unlock()
-  fmt.Printf("eee\n")
-
-   fmt.Println("gen end")
 }
 
 func (self *HttpDownloader) _storer() {
@@ -266,14 +254,14 @@ func (self *HttpDownloader) _storer() {
   defer writer.Flush()
 
   for pw := range self.ch_pw_out { 
-    fmt.Printf("got pw out, start:%v, length: %v\n", pw.start, pw.length)
+    glog.V(2).Infof("got pw out, start:%v, length: %v\n", pw.start, pw.length)
     self.file.Seek(pw.start, 0)
     writer.Write(pw.buf)
-    fmt.Println("finished writing")
+    glog.V(2).Infoln("_storer finished writing")
     self.Lock()
     self.write_count++
     self.Unlock()
-    fmt.Printf("write: %v - %v \n", self.is_produced_end, self.write_count)
+    glog.V(2).Infof("write: %v", self.write_count)
   }
 }
 
@@ -294,7 +282,7 @@ func (self *HttpDownloader) get_size() (int64, error) {
   req, err := http.NewRequest("HEAD", self.src_url, nil)
 
   if err != nil {
-    log.Printf("Failed to create http request to:%v, %v", self.src_url, err)
+    glog.Errorf("Failed to create http request to:%v, %v", self.src_url, err)
     return 0, err
   }
 
